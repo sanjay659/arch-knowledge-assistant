@@ -148,9 +148,22 @@ class TextPreprocessor:
     # Each entry: (list_of_keywords, section_type_label)
 
     SECTION_KEYWORDS = [
-        # ── Current / Existing architecture ──
-        # Must come BEFORE "hosting" because "existing hosting" is
-        # about current state, not general hosting
+        # ══════════════════════════════════════════════════════
+        # PRIORITY ORDER MATTERS — first match wins!
+        #
+        # RULE: More SPECIFIC categories come BEFORE general ones.
+        #
+        # Problem example:
+        #   "Hosting IT Integration Budget Details"
+        #   Contains: "integration" AND "budget"
+        #   If integration is checked first → tagged "integration" ❌
+        #   If budget is checked first → tagged "budget" ✅
+        #
+        # So: budget, risk, assumptions → BEFORE → integration, hosting
+        # ══════════════════════════════════════════════════════
+
+        # ── 1. Current / Existing architecture ──
+        # MOST SPECIFIC: "existing hosting" is about current state, not general hosting
         (
             ["current architecture", "existing hosting", "existing infrastructure",
              "existing design", "legacy", "old architecture", "as-is",
@@ -158,7 +171,7 @@ class TextPreprocessor:
             "current_architecture"
         ),
 
-        # ── Proposed / Target architecture ──
+        # ── 2. Proposed / Target architecture ──
         (
             ["proposed", "target reference", "reference architecture",
              "to-be", "future state", "new design", "target architecture",
@@ -166,38 +179,74 @@ class TextPreprocessor:
             "proposed_architecture"
         ),
 
-        # ── Success Criteria ──
-        # Must come before general matches
+        # ── 3. Success Criteria ──
         (
             ["success criteria", "acceptance criteria",
              "definition of done", "deemed successful"],
             "success_criteria"
         ),
 
-        # ── Operations / Support ──
+        # ── 4. Budget / Costs — BEFORE integration! ──
+        # "Hosting IT Integration Budget Details" → intent is BUDGET
+        (
+            ["budget", "cost", "pricing", "expenditure", "estimate",
+             "spend", "financial", "opex", "capex", "usd",
+             "budget details", "cost breakdown"],
+            "budget"
+        ),
+
+        # ── 5. Risk & Dependencies — BEFORE integration! ──
+        # "Hosting Integration - Risk and Dependencies" → intent is RISK
+        (
+            ["risk", "dependency", "dependencies", "blocker",
+             "concern", "issue", "mitigation"],
+            "risk_dependency"
+        ),
+
+        # ── 6. Assumptions — BEFORE integration! ──
+        # "Key Assumptions" should not be caught by "hosting" or "integration"
+        (
+            ["assumption", "assumptions", "assumed", "prerequisite"],
+            "assumptions"
+        ),
+
+        # ── 7. Inventory / Assessment — BEFORE hosting! ──
+        # "Inventory and Assessment Summary" → intent is INVENTORY, not hosting
+        (
+            ["inventory", "assessment", "server list", "disposition",
+             "catalog", "resource list"],
+            "inventory"
+        ),
+
+        # ── 8. Timeline / Milestones ──
+        (
+            ["milestone", "timeline", "schedule", "gantt",
+             "phase", "deadline", "target date", "close +"],
+            "timeline"
+        ),
+
+        # ── 9. Operations / Support ──
         (
             ["support matrix", "operations support", "raci",
              "escalation", "supporting team"],
             "operations"
         ),
 
-        # ── Integration ──
+        # ── 10. Contacts ──
         (
-            ["integration", "api flow", "middleware", "data flow",
-             "system integration", "interface", "endpoint"],
-            "integration"
+            ["contacts", "workstream", "owner", "@accenture.com",
+             "@company.com"],
+            "contacts"
         ),
 
-        # ── Hosting / Infrastructure ──
+        # ── 11. Out of Scope ──
         (
-            ["hosting", "infrastructure", "environment", "cloud",
-             "on-prem", "on-premises", "aws", "azure", "server",
-             "compute", "storage", "vm", "virtual machine", "gmcs",
-             "landing zone"],
-            "hosting"
+            ["out of scope", "exclusion", "not included"],
+            "out_of_scope"
         ),
 
-        # ── Security ──
+        # ── 12. Security ──
+        # Fairly specific — VPN, firewall, encryption are clear signals
         (
             ["security", "authentication", "auth", "identity", "sso",
              "vpn", "firewall", "access control", "rbac", "encryption",
@@ -205,58 +254,34 @@ class TextPreprocessor:
             "security"
         ),
 
-        # ── Budget / Costs ──
-        (
-            ["budget", "cost", "pricing", "expenditure", "estimate",
-             "spend", "financial", "opex", "capex", "usd"],
-            "budget"
-        ),
-
-        # ── Migration ──
+        # ── 13. Migration ──
         (
             ["migration", "migrate", "decommission", "website migration",
              "transition", "cutover", "move to"],
             "migration"
         ),
 
-        # ── Risk & Dependencies ──
+        # ── 14. Integration — GENERAL CATCH-ALL ──
+        # This comes LATE because "integration" appears in MANY slide titles:
+        #   "Hosting IT Integration Budget Details" → budget (caught above ✅)
+        #   "Hosting Integration - Risk and Dependencies" → risk (caught above ✅)
+        #   "Hosting Integration Considerations" → NOW correctly falls here
         (
-            ["risk", "dependency", "dependencies", "blocker",
-             "concern", "issue", "mitigation"],
-            "risk_dependency"
+            ["integration", "api flow", "middleware", "data flow",
+             "system integration", "interface", "endpoint"],
+            "integration"
         ),
 
-        # ── Assumptions ──
+        # ── 15. Hosting / Infrastructure — MOST GENERAL ──
+        # This comes LAST of the specific types because "hosting" appears
+        # in almost every DataStories slide title.
+        # Only content that doesn't match anything above gets tagged "hosting"
         (
-            ["assumption", "assumptions", "assumed", "prerequisite"],
-            "assumptions"
-        ),
-
-        # ── Inventory / Assessment ──
-        (
-            ["inventory", "assessment", "server list", "disposition",
-             "catalog", "resource list"],
-            "inventory"
-        ),
-
-        # ── Timeline / Milestones ──
-        (
-            ["milestone", "timeline", "schedule", "gantt",
-             "phase", "deadline", "target date", "close +"],
-            "timeline"
-        ),
-
-        # ── Contacts ──
-        (
-            ["contacts", "workstream", "owner", "@accenture.com",
-             "@company.com"],
-            "contacts"
-        ),
-
-        # ── Out of Scope ──
-        (
-            ["out of scope", "exclusion", "not included"],
-            "out_of_scope"
+            ["hosting", "infrastructure", "environment", "cloud",
+             "on-prem", "on-premises", "aws", "azure", "server",
+             "compute", "storage", "vm", "virtual machine", "gmcs",
+             "landing zone"],
+            "hosting"
         ),
     ]
 

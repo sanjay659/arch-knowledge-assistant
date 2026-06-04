@@ -71,6 +71,11 @@ class Settings(BaseSettings):
     azure_docintel_endpoint: str = ""
     azure_docintel_api_key: str = ""
 
+    # ── Phase 3: Multi-Model Routing ──────────────────────
+    azure_openai_chat_model_full: str = "gpt-4.1"
+    azure_openai_chat_model_mini: str = "gpt-4.1-mini"
+    azure_openai_chat_model_nano: str = "gpt-4.1-nano"
+
     # ── Phase 2: Feature Flags ────────────────────────────
     # These let you switch between Phase 1 and Phase 2 components
     # without changing any code — just change .env
