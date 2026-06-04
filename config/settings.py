@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     # ------------------------------------------------------------------
     # Azure OpenAI
     # ------------------------------------------------------------------
-    azure_openai_endpoint: str = "https://sanjay-workflow-resource.openai.azure.com/"
-    azure_openai_api_key: str = "5AIDgubHY6qnsKRSZv09IZGx9aI1SJSUpggD0Tm0CwdIqmQBcEtZJQQJ99CBACYeBjFXJ3w3AAAAACOGtAEb"
+    azure_openai_endpoint: str = ""
+    azure_openai_api_key: str = ""
     azure_openai_api_version: str = "2024-12-01-preview"
 
     # Model deployments
