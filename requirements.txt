@@ -30,3 +30,8 @@ pydantic-settings>=2.3.0     # Settings management from .env
 
 # --- Utilities ---
 rich>=13.7.0                 # Beautiful console output & logging
+
+# ── Phase 2: Azure-Native Services ────────────────────
+azure-search-documents>=12.0.0
+azure-ai-documentintelligence>=1.0.0
+azure-identity>=1.17.0

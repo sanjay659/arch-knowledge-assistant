@@ -158,57 +158,104 @@ if prompt := st.chat_input("Ask about architecture..."):
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # Get response
+    # Get response — try streaming first, fall back to normal
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            request_body = {"question": prompt}
-            if st.session_state.selected_client:
-                request_body["client"] = st.session_state.selected_client
+        request_body = {"question": prompt}
+        if st.session_state.selected_client:
+            request_body["client"] = st.session_state.selected_client
 
-            result = api_request("POST", "/query", json=request_body)
+        try:
+            # Try streaming endpoint
+            import requests as req
+            response = req.post(
+                f"{API_BASE_URL}/query/stream",
+                json=request_body,
+                stream=True,
+                timeout=120,
+            )
 
-            if "error" in result:
-                answer = f"❌ Error: {result['error']}"
-                st.error(answer)
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                })
+            if response.status_code == 200:
+                # Stream tokens into the UI
+                answer_placeholder = st.empty()
+                full_answer = ""
+                for chunk in response.iter_content(chunk_size=None, decode_unicode=True):
+                    if chunk:
+                        full_answer += chunk
+                        answer_placeholder.markdown(full_answer + "▌")
+                answer_placeholder.markdown(full_answer)
+
+                # Get sources from non-streaming endpoint (quick call)
+                result = api_request("POST", "/query", json=request_body)
+                sources = result.get("sources", []) if "error" not in result else []
+                meta = {
+                    "intent": result.get("intent", "?"),
+                    "chunks": result.get("retrieval_count", 0),
+                    "tokens": result.get("tokens_used", {}).get("total", 0),
+                    "time": f"{result.get('processing_time', 0):.2f}",
+                } if "error" not in result else {}
+
             else:
-                answer = result.get("answer", "No answer generated.")
+                # Streaming failed — fall back to normal
+                result = api_request("POST", "/query", json=request_body)
+                if "error" in result:
+                    full_answer = f"❌ Error: {result['error']}"
+                    st.error(full_answer)
+                    sources = []
+                    meta = {}
+                else:
+                    full_answer = result.get("answer", "No answer generated.")
+                    st.markdown(full_answer)
+                    sources = result.get("sources", [])
+                    meta = {
+                        "intent": result.get("intent", "?"),
+                        "chunks": result.get("retrieval_count", 0),
+                        "tokens": result.get("tokens_used", {}).get("total", 0),
+                        "time": f"{result.get('processing_time', 0):.2f}",
+                    }
+
+        except Exception:
+            # Connection error — fall back to normal
+            result = api_request("POST", "/query", json=request_body)
+            if "error" in result:
+                full_answer = f"❌ Error: {result['error']}"
+                st.error(full_answer)
+                sources = []
+                meta = {}
+            else:
+                full_answer = result.get("answer", "No answer generated.")
+                st.markdown(full_answer)
                 sources = result.get("sources", [])
-
-                st.markdown(answer)
-
-                # Sources
-                if sources:
-                    with st.expander(f"📎 Sources ({len(sources)} references)"):
-                        for s in sources:
-                            st.caption(
-                                f"📄 {s.get('file', '?')} | "
-                                f"Slide {s.get('slide', '?')} | "
-                                f"Client: {s.get('client', '?')} | "
-                                f"Type: {s.get('section_type', '?')}"
-                            )
-
-                # Metadata
                 meta = {
                     "intent": result.get("intent", "?"),
                     "chunks": result.get("retrieval_count", 0),
                     "tokens": result.get("tokens_used", {}).get("total", 0),
                     "time": f"{result.get('processing_time', 0):.2f}",
                 }
-                with st.expander("ℹ️ Details"):
-                    c1, c2, c3, c4 = st.columns(4)
-                    c1.caption(f"Intent: {meta['intent']}")
-                    c2.caption(f"Chunks: {meta['chunks']}")
-                    c3.caption(f"Tokens: {meta['tokens']}")
-                    c4.caption(f"Time: {meta['time']}s")
 
-                # Save to history
-                st.session_state.messages.append({
-                    "role": "assistant",
-                    "content": answer,
-                    "sources": sources,
-                    "metadata": meta,
-                })
+        # Show sources
+        if sources:
+            with st.expander(f"📎 Sources ({len(sources)} references)"):
+                for s in sources:
+                    st.caption(
+                        f"📄 {s.get('file', '?')} | "
+                        f"Slide {s.get('slide', '?')} | "
+                        f"Client: {s.get('client', '?')} | "
+                        f"Type: {s.get('section_type', '?')}"
+                    )
+
+        # Show metadata
+        if meta:
+            with st.expander("ℹ️ Details"):
+                c1, c2, c3, c4 = st.columns(4)
+                c1.caption(f"Intent: {meta.get('intent', '?')}")
+                c2.caption(f"Chunks: {meta.get('chunks', '?')}")
+                c3.caption(f"Tokens: {meta.get('tokens', '?')}")
+                c4.caption(f"Time: {meta.get('time', '?')}s")
+
+        # Save to history
+        st.session_state.messages.append({
+            "role": "assistant",
+            "content": full_answer,
+            "sources": sources,
+            "metadata": meta,
+        })

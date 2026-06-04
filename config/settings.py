@@ -62,6 +62,30 @@ class Settings(BaseSettings):
     app_version: str = "1.0.0"
     app_port: int = 8000
 
+    # ── Phase 2: Azure AI Search ──────────────────────────
+    azure_search_endpoint: str = ""
+    azure_search_api_key: str = ""
+    azure_search_index_name: str = "arch-knowledge-index"
+
+    # ── Phase 2: Azure Document Intelligence ──────────────
+    azure_docintel_endpoint: str = ""
+    azure_docintel_api_key: str = ""
+
+    # ── Phase 2: Feature Flags ────────────────────────────
+    # These let you switch between Phase 1 and Phase 2 components
+    # without changing any code — just change .env
+    #
+    # Layman: Like a light switch — flip to "true" to use
+    #         Azure services, keep "false" to use local services.
+    #
+    # WHY feature flags?
+    #   You can test Phase 2 components one at a time:
+    #   1. First switch search: USE_AZURE_SEARCH=true (keep extraction same)
+    #   2. Then switch extraction: USE_DOC_INTELLIGENCE=true
+    #   3. If anything breaks, flip back to false instantly
+    use_azure_search: bool = False
+    use_doc_intelligence: bool = False
+
     # ------------------------------------------------------------------
     # Derived paths (computed properties)
     # ------------------------------------------------------------------

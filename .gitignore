@@ -48,3 +48,6 @@ desktop.ini
 # --- Client Documents (optional — if sensitive) ---
 # Uncomment below if documents contain confidential data:
 # data/documents/
+
+# ── Generated Documentation (large, regenerable) ──
+docs/

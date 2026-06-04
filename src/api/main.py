@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 import logging
 from typing import Optional
-
+from fastapi.responses import StreamingResponse
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -98,12 +98,20 @@ class HealthResponse(BaseModel):
 _query_pipeline = None
 
 
+# def _get_query_pipeline():
+#     global _query_pipeline
+#     if _query_pipeline is None:
+#         from src.pipeline.query_pipeline import QueryPipeline
+#         _query_pipeline = QueryPipeline()
+#     return _query_pipeline
+
 def _get_query_pipeline():
     global _query_pipeline
     if _query_pipeline is None:
-        from src.pipeline.query_pipeline import QueryPipeline
-        _query_pipeline = QueryPipeline()
+        from src.pipeline.query_pipeline_v2 import QueryPipelineV2
+        _query_pipeline = QueryPipelineV2()
     return _query_pipeline
+
 
 
 # ── Endpoints ──
@@ -126,8 +134,13 @@ async def ingest_documents():
     Idempotent — safe to run multiple times.
     """
     try:
-        from src.pipeline.ingest_pipeline import IngestionPipeline
-        pipeline = IngestionPipeline()
+        # from src.pipeline.ingest_pipeline import IngestionPipeline
+        # pipeline = IngestionPipeline()
+        # report = pipeline.run()
+
+        
+        from src.pipeline.ingest_pipeline_v2 import IngestionPipelineV2
+        pipeline = IngestionPipelineV2()
         report = pipeline.run()
 
         return IngestResponseModel(
@@ -170,28 +183,53 @@ async def query_documents(request: QueryRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# @app.get("/stats", response_model=StatsResponseModel)
+# async def get_stats():
+#     """Get statistics about indexed documents."""
+#     try:
+#         from config.settings import get_settings
+#         from src.indexing.indexer import VectorIndexer
+#         settings = get_settings()
+
+#         indexer = VectorIndexer(
+#             azure_endpoint=settings.azure_openai_endpoint,
+#             azure_api_key=settings.azure_openai_api_key,
+#             azure_api_version=settings.azure_openai_api_version,
+#             embedding_deployment=settings.azure_openai_embedding_model,
+#             chromadb_path=str(settings.chromadb_dir),
+#             collection_name="arch_knowledge",
+#         )
+#         stats = indexer.get_stats()
+#         return StatsResponseModel(**stats)
+#     except Exception as e:
+#         logger.error(f"Stats error: {e}")
+#         raise HTTPException(status_code=500, detail=str(e))
+
 @app.get("/stats", response_model=StatsResponseModel)
 async def get_stats():
-    """Get statistics about indexed documents."""
     try:
         from config.settings import get_settings
-        from src.indexing.indexer import VectorIndexer
         settings = get_settings()
 
-        indexer = VectorIndexer(
-            azure_endpoint=settings.azure_openai_endpoint,
-            azure_api_key=settings.azure_openai_api_key,
-            azure_api_version=settings.azure_openai_api_version,
-            embedding_deployment=settings.azure_openai_embedding_model,
-            chromadb_path=str(settings.chromadb_dir),
-            collection_name="arch_knowledge",
-        )
+        if settings.use_azure_search:
+            from src.indexing.azure_search_indexer import AzureSearchIndexer
+            indexer = AzureSearchIndexer()
+        else:
+            from src.indexing.indexer import VectorIndexer
+            indexer = VectorIndexer(
+                azure_endpoint=settings.azure_openai_endpoint,
+                azure_api_key=settings.azure_openai_api_key,
+                azure_api_version=settings.azure_openai_api_version,
+                embedding_deployment=settings.azure_openai_embedding_model,
+                chromadb_path=str(settings.chromadb_dir),
+                collection_name="arch_knowledge",
+            )
+
         stats = indexer.get_stats()
         return StatsResponseModel(**stats)
     except Exception as e:
         logger.error(f"Stats error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.get("/clients", response_model=list)
 async def get_clients():
@@ -205,4 +243,60 @@ async def get_clients():
         return scanner.get_clients()
     except Exception as e:
         logger.error(f"Clients error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/query/stream")
+async def query_documents_stream(request: QueryRequest):
+    """
+    Stream answer token by token.
+    Returns Server-Sent Events (SSE) — each token as it's generated.
+    """
+    try:
+        from config.settings import get_settings
+        from src.generation.streaming_generator import StreamingGenerator
+        settings = get_settings()
+
+        # Get retriever (reuse existing)
+        pipeline = _get_query_pipeline()
+        retriever = pipeline.retriever
+
+        # Detect intent and client
+        intent = retriever.detect_query_intent(request.question)
+        client = request.client or retriever.detect_client(request.question)
+
+        # Retrieve chunks
+        if intent == "comparison":
+            comparison = retriever.retrieve_for_comparison(
+                query=request.question, client_filter=client
+            )
+            current_chunks = comparison["current"]
+            proposed_chunks = comparison["proposed"]
+        else:
+            chunks = retriever.retrieve(
+                query=request.question, client_filter=client
+            )
+
+        # Create streaming generator
+        generator = StreamingGenerator(
+            azure_endpoint=settings.azure_openai_endpoint,
+            azure_api_key=settings.azure_openai_api_key,
+            azure_api_version=settings.azure_openai_api_version,
+            chat_deployment=settings.azure_openai_chat_model,
+        )
+
+        # Stream response
+        if intent == "comparison":
+            token_stream = generator.stream_comparison(
+                request.question, current_chunks, proposed_chunks
+            )
+        else:
+            token_stream = generator.stream(request.question, chunks)
+
+        return StreamingResponse(
+            token_stream,
+            media_type="text/plain",
+        )
+
+    except Exception as e:
+        logger.error(f"Stream error: {e}")
         raise HTTPException(status_code=500, detail=str(e))
