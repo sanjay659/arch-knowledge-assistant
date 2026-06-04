@@ -51,3 +51,6 @@ desktop.ini
 
 # ── Generated Documentation (large, regenerable) ──
 docs/
+
+# Real client data - confidential
+data/documents/DataStories/
