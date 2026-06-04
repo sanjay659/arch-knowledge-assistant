@@ -48,3 +48,6 @@ desktop.ini
 # --- Client Documents (optional — if sensitive) ---
 # Uncomment below if documents contain confidential data:
 # data/documents/
+
+# Real client data - confidential
+data/documents/DataStories/
