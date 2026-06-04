@@ -1,0 +1,1 @@
+"""Architecture Knowledge Assistant."""

@@ -1,0 +1,50 @@
+# ============================================================
+# Architecture Knowledge Assistant — .gitignore
+# ============================================================
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# --- Virtual Environment ---
+venv/
+.venv/
+env/
+ENV/
+
+# --- Environment Variables (NEVER commit) ---
+.env
+.env.local
+.env.production
+
+# --- ChromaDB Data (large, regeneratable) ---
+data/chromadb/
+
+# --- Results & Logs ---
+results/
+*.log
+
+# --- IDE ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# --- Jupyter ---
+.ipynb_checkpoints/
+
+# --- Client Documents (optional — if sensitive) ---
+# Uncomment below if documents contain confidential data:
+# data/documents/
