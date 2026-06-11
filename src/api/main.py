@@ -24,6 +24,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -247,53 +248,40 @@ async def get_clients():
 
 @app.post("/query/stream")
 async def query_documents_stream(request: QueryRequest):
-    """
-    Stream answer token by token.
-    Returns Server-Sent Events (SSE) — each token as it's generated.
-    """
+    """Stream answer token by token."""
     try:
         from config.settings import get_settings
         from src.generation.streaming_generator import StreamingGenerator
         settings = get_settings()
 
-        # Get retriever (reuse existing)
+        # Get retriever
         pipeline = _get_query_pipeline()
         retriever = pipeline.retriever
 
-        # Detect intent and client
-        intent = retriever.detect_query_intent(request.question)
+        # Detect client
         client = request.client or retriever.detect_client(request.question)
 
         # Retrieve chunks
-        if intent == "comparison":
-            comparison = retriever.retrieve_for_comparison(
-                query=request.question, client_filter=client
-            )
-            current_chunks = comparison["current"]
-            proposed_chunks = comparison["proposed"]
-        else:
-            chunks = retriever.retrieve(
-                query=request.question, client_filter=client
-            )
+        chunks = retriever.retrieve(
+            query=request.question,
+            client_filter=client,
+        )
 
         # Create streaming generator
-        generator = StreamingGenerator(
+        gen = StreamingGenerator(
             azure_endpoint=settings.azure_openai_endpoint,
             azure_api_key=settings.azure_openai_api_key,
             azure_api_version=settings.azure_openai_api_version,
             chat_deployment=settings.azure_openai_chat_model,
         )
 
-        # Stream response
-        if intent == "comparison":
-            token_stream = generator.stream_comparison(
-                request.question, current_chunks, proposed_chunks
-            )
-        else:
-            token_stream = generator.stream(request.question, chunks)
+        # THIS IS THE KEY: return a generator function, not collected results
+        def token_generator():
+            for token in gen.stream(request.question, chunks):
+                yield token
 
         return StreamingResponse(
-            token_stream,
+            token_generator(),
             media_type="text/plain",
         )
 
